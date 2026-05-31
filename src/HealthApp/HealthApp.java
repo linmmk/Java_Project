@@ -18,6 +18,7 @@ package HealthApp;
 // App 구현
 
 import java.util.Scanner;
+import java.util.Arrays;
 import StrengthWorkout.*;
 import CardioWorkout.*;
 
@@ -75,6 +76,10 @@ public class HealthApp {
                     pause();
                     break;
                 case 8:
+                    showUserRanking();
+                    pause();
+                    break;
+                case 9:
                     printMessage("프로그램을 종료합니다.");
                     running = false;
                     break;
@@ -294,6 +299,27 @@ public class HealthApp {
         }
     }
 
+    void showUserRanking() {
+        printSection("사용자 랭킹 - 총 소모 칼로리 기준");
+        if (!hasProfiles()) {
+            return;
+        }
+
+        UserProfile[] rankingProfiles = Arrays.copyOf(profiles, profileCount);
+        Arrays.sort(rankingProfiles, (a, b) -> Double.compare(b.getTotalCalories(), a.getTotalCalories()));
+
+        for (int i = 0; i < rankingProfiles.length; i++) {
+            UserProfile profile = rankingProfiles[i];
+            String selected = profile == currentUser ? " *" : "";
+            System.out.printf("%d위. %s - %.0f kcal, 운동 기록 %d개%s%n",
+                    i + 1,
+                    profile.getName(),
+                    profile.getTotalCalories(),
+                    profile.getWorkoutCount(),
+                    selected);
+        }
+    }
+
     void printMenu() {
         printSection("Health App");
         if (currentUser == null) {
@@ -308,7 +334,8 @@ public class HealthApp {
         System.out.println("5. 운동별 계산 기능");
         System.out.println("6. 총 운동 시간, 거리, 칼로리 통계 보기");
         System.out.println("7. 운동 강도 분석 보기");
-        System.out.println("8. 프로그램 종료");
+        System.out.println("8. 사용자 랭킹 보기");
+        System.out.println("9. 프로그램 종료");
     }
 
     void printProfileList() {

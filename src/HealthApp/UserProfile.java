@@ -41,6 +41,16 @@ public class UserProfile {
         return Arrays.copyOf(workoutLogs, getWorkoutCount());
     }
 
+    public double getTotalCalories() {
+        double totalCalories = 0;
+
+        for (int i = 0; i < getWorkoutCount(); i++) {
+            totalCalories += workoutLogs[i].getCalories();
+        }
+
+        return totalCalories;
+    }
+
     public void addWorkoutLog(Workout log) {
         if (getWorkoutCount() >= workoutLogs.length) {
             throw new IllegalStateException("운동 기록은 최대 100개까지 저장할 수 있습니다.");
