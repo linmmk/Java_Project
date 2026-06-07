@@ -21,6 +21,7 @@ import java.util.Scanner;
 import java.util.Arrays;
 import StrengthWorkout.*;
 import CardioWorkout.*;
+import java.util.InputMismatchException
 
 public class HealthApp {
     private static final String LINE = "─────────────────────────────────────────────────";
@@ -413,6 +414,18 @@ public class HealthApp {
             System.out.println(LINE);
             System.out.println(message);
             prompt();
+            
+            try {
+                // 정상적으로 숫자가 입력되면 값을 반환하고 루프 탈출
+                int input = sc.nextInt();
+                sc.nextLine(); // 엔터 찌꺼기 비우기
+                return input;
+                
+            } catch (java.util.InputMismatchException e) {
+                // 숫자가 아닌 문자가 입력되었을 때
+                System.out.println("잘못된 입력입니다. 숫자만 입력해주세요!");
+                sc.nextLine(); //
+            }
 
             int input = sc.nextInt();
             sc.nextLine();
@@ -425,6 +438,27 @@ public class HealthApp {
         System.out.println(LINE);
         System.out.println(message);
         prompt();
+
+        try {
+                String input = sc.nextLine(); // 일단 다 받아들임
+
+                //입력값이 비어있는가
+                if (input.trim().isEmpty()) {
+                    throw new Exception("입력값이 비어있습니다."); 
+                }
+
+                
+                // ".*\\d.*"는 문자열 안에 숫자(0~9)가 단 하나라도 포함되어 있는지 확인하는 자바의 기능(정규표현식)
+                if (input.matches(".*\\d.*")) {
+                    throw new Exception("문자 입력란에 숫자가 포함될 수 없습니다.");
+                }
+
+                return input; // 숫자가 없으면 무사히 통과하고 메서드 종료
+
+            } catch (Exception e) {
+                // 위에서 던진 에러를 여기서 잡음
+                System.out.println("잘못된 입력입니다!");
+            }
 
         String input = sc.nextLine();
         
