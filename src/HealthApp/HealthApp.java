@@ -19,6 +19,7 @@ package HealthApp;
 
 import java.util.Scanner;
 import java.util.Arrays;
+import java.util.StringTokenizer;
 import StrengthWorkout.*;
 import CardioWorkout.*;
 import java.util.InputMismatchException
@@ -81,6 +82,14 @@ public class HealthApp {
                     pause();
                     break;
                 case 9:
+                	exportToMarkdown();
+                	pause();
+                	break;
+                case 10:
+                	importFromMarkdown();
+                	pause();
+                	break;
+                case 11:
                     printMessage("프로그램을 종료합니다.");
                     running = false;
                     break;
@@ -275,7 +284,8 @@ public class HealthApp {
             totalMinutes += workout.getDurationMinutes();
             totalCalories += workout.getCalories();
 
-            if (workout instanceof CardioWorkout cardioWorkout) {
+            if (workout instanceof CardioWorkout) {
+                CardioWorkout cardioWorkout = (CardioWorkout) workout;
                 totalDistance += cardioWorkout.getDistance();
             }
         }
@@ -307,8 +317,23 @@ public class HealthApp {
         }
 
         UserProfile[] rankingProfiles = Arrays.copyOf(profiles, profileCount);
-        Arrays.sort(rankingProfiles, (a, b) -> Double.compare(b.getTotalCalories(), a.getTotalCalories()));
 
+        // 정렬
+        for (int i = 0; i < rankingProfiles.length - 1; i++) {
+            int maxIndex = i;
+
+            for (int j = i + 1; j < rankingProfiles.length; j++) {
+                if (rankingProfiles[j].getTotalCalories() > rankingProfiles[maxIndex].getTotalCalories()) {
+                    maxIndex = j;
+                }
+            }
+
+            UserProfile temp = rankingProfiles[i];
+            rankingProfiles[i] = rankingProfiles[maxIndex];
+            rankingProfiles[maxIndex] = temp;
+        }
+
+        // 정렬된 배열 뽑기
         for (int i = 0; i < rankingProfiles.length; i++) {
             UserProfile profile = rankingProfiles[i];
             String selected = profile == currentUser ? " *" : "";
@@ -318,6 +343,232 @@ public class HealthApp {
                     profile.getTotalCalories(),
                     profile.getWorkoutCount(),
                     selected);
+        }
+    }    
+    
+    void exportToMarkdown() {
+    	printSection("내보내기 - 아래의 내용을 복사");
+        if (!hasProfiles()) {
+            return;
+        }
+
+        System.out.println("| profileNo | selected | name | age | height | profileWeight | workoutType | userWeight | durationMinutes | velocity | repetitions | exerciseWeight | numberOfSets |");
+        System.out.println("| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |");
+
+        for (int i = 0; i < profileCount; i++) {
+            UserProfile profile = profiles[i]; // 프로필 하나 선택
+            Workout[] workoutLogs = profile.getWorkoutLogs(); // 프로필 안의 운동 기록 불러옴
+
+            // 선택된 프로필에 대해 운동 기록 순회함
+            if (workoutLogs.length == 0) {
+            	// 운동 기록이 없으면 null 전달
+                printMarkdownRow(i + 1, profile, null);
+            } else {
+                for (Workout workout : workoutLogs) {
+                	// 운동 기록이 있으면 운동 기록 배열인 workout 전달
+                    printMarkdownRow(i + 1, profile, workout);
+                }
+            }
+        }
+    }
+    
+    void importFromMarkdown() {
+    	printSection("불러오기 - Markdown 표 형식으로 입력");
+        System.out.println("Markdown 표를 붙여넣고 마지막 줄에 END를 입력하십시오.");
+        System.out.println("불러오기에 성공하면 기존 프로필과 운동 기록은 입력한 내용으로 교체됩니다.");
+
+        UserProfile[] importedProfiles = new UserProfile[MAX_PROFILE_COUNT];
+        int[] profileNumbers = new int[MAX_PROFILE_COUNT];
+        int importedProfileCount = 0;
+        int selectedProfileIndex = -1;
+        int importedWorkoutCount = 0;
+        int skippedRowCount = 0;
+
+        while (true) {
+            String line = sc.nextLine();
+
+            if (line.equalsIgnoreCase("END")) {
+                break;
+            }
+
+            String[] columns = parseMarkdownColumns(line);
+            if (columns == null || isMarkdownHeaderOrSeparator(columns)) {
+                continue;
+            }
+
+            try {
+                int profileNo = Integer.parseInt(columns[0]);
+                int selected = Integer.parseInt(columns[1]);
+                String name = columns[2];
+                int age = Integer.parseInt(columns[3]);
+                int height = Integer.parseInt(columns[4]);
+                int profileWeight = Integer.parseInt(columns[5]);
+
+                int profileIndex = findProfileIndex(profileNumbers, importedProfileCount, profileNo);
+                if (profileIndex == -1) {
+                    if (importedProfileCount >= MAX_PROFILE_COUNT) {
+                        skippedRowCount++;
+                        continue;
+                    }
+
+                    importedProfiles[importedProfileCount] = new UserProfile(name, age, height, profileWeight);
+                    profileNumbers[importedProfileCount] = profileNo;
+                    profileIndex = importedProfileCount++;
+                }
+
+                if (selected == 1 && selectedProfileIndex == -1) {
+                    selectedProfileIndex = profileIndex;
+                }
+
+                Workout workout = createWorkoutFromMarkdown(columns);
+                if (workout != null) {
+                    importedProfiles[profileIndex].addWorkoutLog(workout);
+                    importedWorkoutCount++;
+                }
+            } catch (RuntimeException e) {
+                skippedRowCount++;
+            }
+        }
+
+        if (importedProfileCount == 0) {
+            printMessage("불러올 수 있는 프로필이 없습니다. 기존 데이터는 유지됩니다.");
+            return;
+        }
+
+        profiles = importedProfiles;
+        profileCount = importedProfileCount;
+
+        if (selectedProfileIndex >= 0 && selectedProfileIndex < profileCount) {
+            currentUser = profiles[selectedProfileIndex];
+        } else {
+            currentUser = profiles[0];
+        }
+
+        System.out.printf("프로필 %d개, 운동 기록 %d개를 불러왔습니다.%n",
+                profileCount, importedWorkoutCount);
+        if (skippedRowCount > 0) {
+            System.out.printf("형식이 맞지 않아 건너뛴 행: %d개%n", skippedRowCount);
+        }
+    }
+
+    void printMarkdownRow(int profileNo, UserProfile profile, Workout workout) {
+        String selected = profile == currentUser ? "1" : "0";
+        String workoutType = getWorkoutType(workout);
+        
+        int userWeight = (workout == null) ? 0 : workout.getUserWeight();
+        int durationMinutes = (workout == null) ? 0 : workout.getDurationMinutes();
+        int velocity = 0;
+        int repetitions = 0;
+        int exerciseWeight = 0;
+        int numberOfSets = 0;
+
+        if (workout instanceof CardioWorkout) {
+            CardioWorkout cardioWorkout = (CardioWorkout) workout;
+            velocity = cardioWorkout.getVelocity();
+        } else if (workout instanceof StrengthWorkout) {
+            StrengthWorkout strengthWorkout = (StrengthWorkout) workout;
+            repetitions = strengthWorkout.getRepetitions();
+            exerciseWeight = strengthWorkout.getExerciseWeight();
+            numberOfSets = strengthWorkout.getNumberOfSets();
+        }
+        
+        
+        System.out.printf("| %d | %s | %s | %d | %d | %d | %s | %d | %d | %d | %d | %d | %d |%n",
+                profileNo,
+                selected,
+                escapeMarkdownCell(profile.getName()),
+                profile.getAge(),
+                profile.getHeight(),
+                profile.getWeight(),
+                workoutType,
+                userWeight,
+                durationMinutes,
+                velocity,
+                repetitions,
+                exerciseWeight,
+                numberOfSets);
+    }
+
+    String getWorkoutType(Workout workout) {
+        if (workout == null) {
+            return "NONE";
+        } else if (workout instanceof Running) {
+            return "RUNNING";
+        } else if (workout instanceof Cycling) {
+            return "CYCLING";
+        } else if (workout instanceof Walking) {
+            return "WALKING";
+        } else if (workout instanceof DeadLift) {
+            return "DEADLIFT";
+        } else if (workout instanceof BenchPress) {
+            return "BENCH_PRESS";
+        } else if (workout instanceof PushUp) {
+            return "PUSH_UP";
+        }
+
+        return "NONE";
+    }
+
+    String escapeMarkdownCell(String value) {
+        return value.replace("|", "/").replace("\n", " ");
+    }
+
+    String[] parseMarkdownColumns(String line) {
+        StringTokenizer tokenizer = new StringTokenizer(line, "|");
+        String[] columns = new String[13];
+        int index = 0;
+
+        while (tokenizer.hasMoreTokens() && index < columns.length) {
+            columns[index++] = tokenizer.nextToken().trim();
+        }
+
+        if (index != columns.length) {
+            return null;
+        }
+
+        return columns;
+    }
+
+    boolean isMarkdownHeaderOrSeparator(String[] columns) {
+        return columns[0].equalsIgnoreCase("profileNo") || columns[0].startsWith("---");
+    }
+
+    int findProfileIndex(int[] profileNumbers, int importedProfileCount, int profileNo) {
+        for (int i = 0; i < importedProfileCount; i++) {
+            if (profileNumbers[i] == profileNo) {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    Workout createWorkoutFromMarkdown(String[] columns) {
+        String workoutType = columns[6];
+        int userWeight = Integer.parseInt(columns[7]);
+        int durationMinutes = Integer.parseInt(columns[8]);
+        int velocity = Integer.parseInt(columns[9]);
+        int repetitions = Integer.parseInt(columns[10]);
+        int exerciseWeight = Integer.parseInt(columns[11]);
+        int numberOfSets = Integer.parseInt(columns[12]);
+
+        switch (workoutType) {
+            case "NONE":
+                return null;
+            case "RUNNING":
+                return new Running(userWeight, durationMinutes, velocity);
+            case "CYCLING":
+                return new Cycling(userWeight, durationMinutes, velocity);
+            case "WALKING":
+                return new Walking(userWeight, durationMinutes, velocity);
+            case "DEADLIFT":
+                return new DeadLift(userWeight, repetitions, exerciseWeight, numberOfSets, durationMinutes);
+            case "BENCH_PRESS":
+                return new BenchPress(userWeight, repetitions, exerciseWeight, numberOfSets, durationMinutes);
+            case "PUSH_UP":
+                return new PushUp(userWeight, repetitions, numberOfSets, durationMinutes);
+            default:
+                throw new IllegalArgumentException("알 수 없는 운동 종류입니다.");
         }
     }
 
@@ -336,7 +587,9 @@ public class HealthApp {
         System.out.println("6. 총 운동 시간, 거리, 칼로리 통계 보기");
         System.out.println("7. 운동 강도 분석 보기");
         System.out.println("8. 사용자 랭킹 보기");
-        System.out.println("9. 프로그램 종료");
+        System.out.println("9. 내보내기");
+        System.out.println("10. 불러오기");
+        System.out.println("11. 프로그램 종료");
     }
 
     void printProfileList() {
